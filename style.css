@@ -12,7 +12,7 @@ html, body {
   width: 100%; /* Full width of its container */
   height: 80vh; /* 80% of viewport height */
   display: block; /* Ensure it behaves as a block element */
-  border: 3px solid lime; /* Temporary border to confirm this CSS is loaded */
+  /* border: 3px solid lime; */ /* Temporary border REMOVED */
   /* Previous debugging styles like background-color: #222222; or specific margins are removed */
 }
 
