@@ -22,8 +22,9 @@ const MAX_PARTICLES = 8000;
 const PARTICLE_LIFESPAN = 3.0;
 const GRAVITY = -0.012;
 const PARTICLE_ORIGIN_Y = -3;
-const PARTICLE_SIZE = 0.06; // This is the "production" size, debug material will override
+const PARTICLE_SIZE = 0.06; 
 const ANALYSER_FFT_SIZE = 512;
+console.log("Global PARTICLE_ORIGIN_Y:", PARTICLE_ORIGIN_Y); // Log for PARTICLE_ORIGIN_Y
 
 // Beat Detection
 const BEAT_TRESHOLD_MULTIPLIER = 1.35;
@@ -69,16 +70,16 @@ function initThreeJS() {
 
     // Camera Initialization and Positioning (after scene)
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.set(0, 0, 1); // Positioned to view a small cube at origin
-    camera.lookAt(0, 0, 0); // Look at the origin
-    console.log(`initThreeJS: PerspectiveCamera created. Position: (0,0,1), Aspect: ${camera.aspect}`, camera);
+    camera.position.set(0, 0, 10); // Restored original camera position for the fountain
+    camera.lookAt(0, 0, 0); // Look at the origin (or scene.position)
+    console.log(`initThreeJS: PerspectiveCamera created. Position: (0,0,10), Aspect: ${camera.aspect}`, camera);
 
-    // Test Cube Re-verification (after scene and camera)
-    const cubeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-    const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
-    const testCube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-    scene.add(testCube);
-    console.log("initThreeJS: Red test cube (0.2x0.2x0.2) added to scene at (0,0,0).");
+    // Test Cube Re-verification (after scene and camera) - NOW COMMENTED OUT
+    // const cubeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+    // const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
+    // const testCube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    // scene.add(testCube);
+    // console.log("initThreeJS: Red test cube (0.2x0.2x0.2) added to scene at (0,0,0)."); // Commented out
     
     // Handle window resize (should also use canvas client dimensions)
     window.addEventListener('resize', () => {
@@ -128,15 +129,17 @@ function initFountainParticles() {
 
     // Restore original particle material
     const particleMaterial = new THREE.PointsMaterial({
-        size: PARTICLE_SIZE, // Use defined PARTICLE_SIZE
-        vertexColors: true,  // Enable vertex colors for audio-reactive colors
+        size: PARTICLE_SIZE,
+        vertexColors: true, 
         transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending // For a brighter effect
+        opacity: 0.8, 
+        blending: THREE.AdditiveBlending,
+        depthWrite: false, // Added as suggested
     });
-    console.log(`Particle material restored to: size: ${particleMaterial.size}, vertexColors: ${particleMaterial.vertexColors}, transparent: ${particleMaterial.transparent}, blending: ${particleMaterial.blending}`);
+    // Updated log to match subtask format
+    console.log("initFountainParticles: Particle material created with size:", particleMaterial.size, "vertexColors:", particleMaterial.vertexColors, "opacity:", particleMaterial.opacity, "blending:", particleMaterial.blending, "depthWrite:", particleMaterial.depthWrite);
 
-    particlesMesh = new THREE.Points(particlesGeometry, particleMaterial); // Use original material
+    particlesMesh = new THREE.Points(particlesGeometry, particleMaterial); 
     scene.add(particlesMesh);
     console.log("particlesMesh added to scene");
 }
@@ -199,7 +202,8 @@ function emitParticle(bassAvg, trebleAvg, isBeat) {
 
     // --- Debugging: Log Particle Properties (Still useful to see the audio-reactive values) ---
     if (particleIndex !== -1) {
-        console.log(`Emitted particle ${particleIndex}: pos(${particle.position.x.toFixed(2)},${particle.position.y.toFixed(2)},${particle.position.z.toFixed(2)}), vel(${particle.velocity.x.toFixed(2)},${particle.velocity.y.toFixed(2)},${particle.velocity.z.toFixed(2)}), lifespan: ${particle.lifespan.toFixed(2)}, color(r,g,b): (${particle.color.r.toFixed(2)}, ${particle.color.g.toFixed(2)}, ${particle.color.b.toFixed(2)})`);
+        // Updated log to match subtask format
+        console.log(`emitParticle: Activating particle ${particleIndex}. Initial - Pos: (${particle.position.x.toFixed(2)}, ${particle.position.y.toFixed(2)}, ${particle.position.z.toFixed(2)}), Vel: (${particle.velocity.x.toFixed(2)}, ${particle.velocity.y.toFixed(2)}, ${particle.velocity.z.toFixed(2)}), Color: (${particle.color.r.toFixed(2)}, ${particle.color.g.toFixed(2)}, ${particle.color.b.toFixed(2)}), Lifespan: ${particle.lifespan.toFixed(2)}`);
     }
 }
 
@@ -433,16 +437,19 @@ function animate() {
         // and return default/empty audioFeatures if necessary.
         const audioFeatures = analyzeAudio() || { bassAverage: 0, trebleAverage: 0, isBeat: false };
         
-        // For now, we are not calling emitParticle here based on subtask instructions.
-        // Particle emission logic will be re-added later.
-        // if (analyser) { 
-        //     const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
-        //     for (let i = 0; i < particlesToEmit; i++) {
-        //         if (Math.random() < 0.8 || beatDetectedThisFrame) {
-        //             emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
-        //         }
-        //     }
-        // }
+        // Particle Emission Logic - Restored and Instrumented
+        if (analyser) { // Ensure analyser is available before using audioFeatures that depend on it
+            const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
+            
+            // Logging for Emission Decision
+            console.log(`Particle Emission Logic - beatDetectedThisFrame: ${beatDetectedThisFrame}, bassAverage: ${audioFeatures.bassAverage ? audioFeatures.bassAverage.toFixed(2) : 'N/A'}, particlesToEmit: ${particlesToEmit}`);
+
+            for (let i = 0; i < particlesToEmit; i++) {
+                if (Math.random() < 0.8 || beatDetectedThisFrame) { // Probabilistic emission, but always emit on beat
+                    emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
+                }
+            }
+        }
         
         updateParticles(); // updateParticles itself has debugging logs for active particles
     } else {
