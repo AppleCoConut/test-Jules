@@ -1,8 +1,8 @@
 console.log("main.js: Script start");
 // Step 1: Set up basic Three.js scene, camera, and WebGLRenderer
 let scene, camera, renderer;
-let audioReady = false; // Will be false, so no audio-dependent logic runs
-let frameCount = 0; // For less frequent logging in animate()
+let audioReady = false; 
+// let frameCount = 0; // Removed for this task
 
 // Audio Components - Initialized to null or default
 let audioContext = null;
@@ -99,17 +99,19 @@ function initFountainParticles() {
             color: new THREE.Color() // Will be set in emitParticle or by debug material
         });
 
-        // Debug: Initialize first 5 particles at the origin point of the fountain.
-        if (i < 5) {
-            positions[i * 3 + 0] = 0;
-            positions[i * 3 + 1] = PARTICLE_ORIGIN_Y; 
-            positions[i * 3 + 2] = 0;
-        } else {
-            positions[i * 3 + 0] = 0;
-            positions[i * 3 + 1] = -1000; // Off-screen
-            positions[i * 3 + 2] = 0;
-        }
-        colors[i * 3 + 0] = 0; colors[i * 3 + 1] = 1; colors[i * 3 + 2] = 0; // Default to green for attribute
+        // Initialize all particles off-screen initially
+        // // Debug: Initialize first 5 particles at the origin point of the fountain.
+        // if (i < 5) {
+        //     positions[i * 3 + 0] = 0;
+        //     positions[i * 3 + 1] = PARTICLE_ORIGIN_Y; 
+        //     positions[i * 3 + 2] = 0;
+        // } else {
+        positions[i * 3 + 0] = 0;
+        positions[i * 3 + 1] = -1000; // Off-screen
+        positions[i * 3 + 2] = 0;
+        // }
+        // Initialize colors (will be overwritten by emitParticle logic if vertexColors is true)
+        colors[i * 3 + 0] = 0.5; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.5; // Default to grey
     }
     console.log(`Particle pool initialized with ${particlePool.length} particles.`);
     console.log(`Particle geometry position attribute count (vertices): ${MAX_PARTICLES}`);
@@ -117,24 +119,24 @@ function initFountainParticles() {
     particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Debugging particle material settings
-    const debugParticleMaterial = new THREE.PointsMaterial({
-        size: 0.5, 
-        color: 0x00ff00, // Bright green
-        vertexColors: false, 
-        transparent: false, 
-        blending: THREE.NormalBlending,
+    // Restore original particle material
+    const particleMaterial = new THREE.PointsMaterial({
+        size: PARTICLE_SIZE, // Use defined PARTICLE_SIZE
+        vertexColors: true,  // Enable vertex colors for audio-reactive colors
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending // For a brighter effect
     });
-    console.log(`Particle material set with size: ${debugParticleMaterial.size}, color: #${debugParticleMaterial.color.getHexString()}, vertexColors: ${debugParticleMaterial.vertexColors}, transparent: ${debugParticleMaterial.transparent}`);
+    console.log(`Particle material restored to: size: ${particleMaterial.size}, vertexColors: ${particleMaterial.vertexColors}, transparent: ${particleMaterial.transparent}, blending: ${particleMaterial.blending}`);
 
-    particlesMesh = new THREE.Points(particlesGeometry, debugParticleMaterial);
+    particlesMesh = new THREE.Points(particlesGeometry, particleMaterial); // Use original material
     scene.add(particlesMesh);
     console.log("particlesMesh added to scene");
 }
 
 function emitParticle(bassAvg, trebleAvg, isBeat) {
     // --- Debugging: Log function call ---
-    console.log("emitParticle called - current active particles (before emit):", particlePool.filter(p => p.isActive).length);
+    // console.log("emitParticle called - current active particles (before emit):", particlePool.filter(p => p.isActive).length); // Can be spammy
 
     let particle = null;
     let particleIndex = -1; 
@@ -149,13 +151,46 @@ function emitParticle(bassAvg, trebleAvg, isBeat) {
 
     if (!particle) return; 
     
-    // --- Debugging: Override Particle Properties ---
+    // --- Original Audio-Reactive Particle Properties ---
     particle.isActive = true;
-    particle.position.set(0, PARTICLE_ORIGIN_Y + 0.1, 0); 
-    particle.velocity.set(0, 0.05, 0); 
-    particle.lifespan = PARTICLE_LIFESPAN * 2; 
-    particle.color.setRGB(0,0,1); // Set internal particle color to blue for logging
+    particle.lifespan = PARTICLE_LIFESPAN + (Math.random() * 0.5 - 0.25); // slight variation
 
+    // Initial position at the origin
+    particle.position.set(
+        (Math.random() - 0.5) * 0.2, // Small spread at base
+        PARTICLE_ORIGIN_Y,
+        (Math.random() - 0.5) * 0.2
+    );
+
+    // Initial velocity influenced by bass and beat
+    const baseVelocityY = 0.10 + (bassAvg / 255) * 0.10; // Increased base and bass influence
+    const velocityMultiplier = isBeat ? 1.8 + (Math.random() * 0.7) : 1.0; // More explosive on beat
+    
+    particle.velocity.set(
+        (Math.random() - 0.5) * 0.035 * (1 + bassAvg / 100), // Wider spread, more bass influence
+        baseVelocityY * velocityMultiplier,
+        (Math.random() - 0.5) * 0.035 * (1 + bassAvg / 100)
+    );
+
+    // Color influenced by treble - Tuned for vibrant, modern feel
+    const trebleNormalized = Math.min(trebleAvg / 180, 1.0); // Adjusted treble sensitivity
+    if (isBeat) {
+        // Flashy reds, oranges, yellows on beat
+        particle.color.setHSL(Math.random() * 0.15 + 0.0, 1.0, 0.75); 
+    } else {
+        // Normal particles: Cool base (cyan/blue) moving to warmer (light purple/pink) with treble
+        particle.color.setHSL(0.55 + trebleNormalized * 0.20, 0.9, 0.6 + trebleNormalized * 0.15);
+    }
+    // --- End of Original Audio-Reactive Particle Properties ---
+
+    // --- Debugging: Override Particle Properties (Now Commented Out) ---
+    // particle.isActive = true;
+    // particle.position.set(0, PARTICLE_ORIGIN_Y + 0.1, 0); 
+    // particle.velocity.set(0, 0.05, 0); 
+    // particle.lifespan = PARTICLE_LIFESPAN * 2; 
+    // particle.color.setRGB(0,0,1); // Set internal particle color to blue for logging
+
+    // --- Debugging: Log Particle Properties (Still useful to see the audio-reactive values) ---
     if (particleIndex !== -1) {
         console.log(`Emitted particle ${particleIndex}: pos(${particle.position.x.toFixed(2)},${particle.position.y.toFixed(2)},${particle.position.z.toFixed(2)}), vel(${particle.velocity.x.toFixed(2)},${particle.velocity.y.toFixed(2)},${particle.velocity.z.toFixed(2)}), lifespan: ${particle.lifespan.toFixed(2)}, color(r,g,b): (${particle.color.r.toFixed(2)}, ${particle.color.g.toFixed(2)}, ${particle.color.b.toFixed(2)})`);
     }
@@ -248,8 +283,9 @@ function resetBeatDetectionHistory() {
 }
 
 async function loadAndPlayAudioFromURL(audioURL) {
-    console.log(`Attempting to load audio from URL: ${audioURL}`);
+    console.log("loadAndPlayAudioFromURL: Called with URL:", audioURL); // Log 1
     audioReady = false; // Reset audio readiness
+    console.log("loadAndPlayAudioFromURL: audioReady set to false initially.");
 
     // 1. Cleanup existing AudioContext and Source if they exist
     if (source) {
@@ -274,42 +310,62 @@ async function loadAndPlayAudioFromURL(audioURL) {
     // 2. Create new AudioContext
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log("New AudioContext created.");
+        console.log("loadAndPlayAudioFromURL: New AudioContext created.", audioContext);
 
         // 3. Fetch Audio Data
+        console.log("loadAndPlayAudioFromURL: About to fetch."); // Log 2
         const response = await fetch(audioURL);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        console.log("loadAndPlayAudioFromURL: Fetch response status:", response.status, "ok:", response.ok); // Log 3a
+        if (!response.ok) { // Log 3b
+            console.error(`loadAndPlayAudioFromURL: HTTP error! status: ${response.status}`); 
+            throw new Error(`HTTP error! status: ${response.status}`); 
         }
+
+        console.log("loadAndPlayAudioFromURL: About to get arrayBuffer."); // Log 4
         const arrayBuffer = await response.arrayBuffer();
-        console.log("Audio data fetched from URL.");
+        console.log("loadAndPlayAudioFromURL: Got arrayBuffer, length:", arrayBuffer.byteLength); // Log 5
 
         // 4. Decode Audio Data
-        // Use promise-based decodeAudioData
+        console.log("loadAndPlayAudioFromURL: About to decodeAudioData."); // Log 6
         const audioBuffer = await new Promise((resolve, reject) => {
-            audioContext.decodeAudioData(arrayBuffer, resolve, reject);
+            audioContext.decodeAudioData(arrayBuffer, 
+                (decodedBuffer) => { // Success callback
+                    console.log("loadAndPlayAudioFromURL: decodeAudioData SUCCEEDED."); // Log 7a
+                    resolve(decodedBuffer);
+                },
+                (error) => { // Error callback
+                    console.error("loadAndPlayAudioFromURL: decodeAudioData FAILED:", error); // Log 8
+                    audioReady = false; // Ensure audioReady is false on decode failure
+                    reject(error);
+                }
+            );
         });
-        console.log("Audio data decoded successfully.");
+        // console.log("Audio data decoded successfully."); // Covered by Log 7a
 
         // 5. Setup Analyser and Source
+        console.log("loadAndPlayAudioFromURL: Setting up Analyser and Source.");
         analyser = audioContext.createAnalyser();
         analyser.fftSize = ANALYSER_FFT_SIZE; // Use existing constant
         // Initialize dataArray based on new analyser settings
         dataArray = new Uint8Array(analyser.frequencyBinCount);
-
+        console.log("loadAndPlayAudioFromURL: Analyser created, dataArray initialized.");
 
         source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.loop = true; // Make the audio loop
+        console.log("loadAndPlayAudioFromURL: AudioBufferSourceNode created and buffer assigned.");
 
         // 6. Connect nodes
         source.connect(analyser);
         analyser.connect(audioContext.destination);
+        console.log("loadAndPlayAudioFromURL: Source connected to Analyser, Analyser to Destination.");
 
         // 7. Start playback
+        console.log("loadAndPlayAudioFromURL: About to call source.start(0)."); // Log 9
         source.start(0);
-        console.log("Audio playing from URL. audioReady = true.");
+        // console.log("Audio playing from URL. audioReady = true."); // Covered by next log
         audioReady = true;
+        console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE."); // Log 7b
 
         // Reset beat detection history if applicable
         if (typeof resetBeatDetectionHistory === 'function') {
@@ -317,7 +373,7 @@ async function loadAndPlayAudioFromURL(audioURL) {
         }
 
     } catch (error) {
-        console.error("Error in loadAndPlayAudioFromURL:", error);
+        console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK:", error); // Log 10
         audioReady = false;
         // Ensure audioContext is closed on error if it was created
         if (audioContext && audioContext.state !== 'closed') {
@@ -335,38 +391,42 @@ async function loadAndPlayAudioFromURL(audioURL) {
 // --- Main Animation Loop ---
 function animate() {
     requestAnimationFrame(animate);
-    // console.log("animate: requestAnimationFrame scheduled."); // Too spammy for now
-    // console.log("animate: Function Entered. audioReady:", audioReady); // Too spammy for now
 
-    frameCount++;
-    if (frameCount % 60 === 0) { 
-        console.log("animate: Still animating... audioReady:", audioReady);
-    }
-
+    // Unconditional Render Call
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     } else {
+        // This warning is important if rendering setup is incomplete
         console.warn("animate: renderer, scene, or camera not ready for rendering.");
     }
 
-    if (audioReady) {
-        let audioFeatures = {};
-        if (analyser && audioContext && audioContext.state === 'running') {
-             const features = analyzeAudio(); // analyzeAudio now returns undefined if analyser or dataArray is null
-             if(features) audioFeatures = features; else audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
-        } else {
-            audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
-        }
+    // Log audioReady state after rendering attempt
+    console.log("animate: current audioReady state:", audioReady);
 
-        if (analyser) { 
-            const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
-            for (let i = 0; i < particlesToEmit; i++) {
-                if (Math.random() < 0.8 || beatDetectedThisFrame) {
-                    emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
-                }
-            }
-        }
-        updateParticles(); 
+    if (audioReady) {
+        // Optional: console.log("animate: audioReady is true, processing audio.");
+        
+        // Call analyzeAudio. It should handle cases where analyser might still be null
+        // and return default/empty audioFeatures if necessary.
+        const audioFeatures = analyzeAudio() || { bassAverage: 0, trebleAverage: 0, isBeat: false };
+        
+        // For now, we are not calling emitParticle here based on subtask instructions.
+        // Particle emission logic will be re-added later.
+        // if (analyser) { 
+        //     const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
+        //     for (let i = 0; i < particlesToEmit; i++) {
+        //         if (Math.random() < 0.8 || beatDetectedThisFrame) {
+        //             emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
+        //         }
+        //     }
+        // }
+        
+        updateParticles(); // updateParticles itself has debugging logs for active particles
+    } else {
+        // Optional: console.log("animate: audioReady is false, skipping audio processing.");
+        // No audio-dependent logic here.
+        // The 5 static debug particles from initFountainParticles and the test cube will still be visible.
+        // No new particles will be emitted, and existing ones won't be updated by updateParticles.
     }
 }
 
