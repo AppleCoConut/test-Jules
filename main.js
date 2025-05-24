@@ -40,8 +40,8 @@ let energyHistory = new Array(30).fill(0); // For running average of energy
 let energyHistoryIndex = 0;
 let beatDetectedThisFrame = false;
 
-// Initialization Flag
-let isInitialized = false;
+// Initialization Flag / Audio Ready Flag
+let audioReady = false; // Renamed from isInitialized for clarity with subtask
 
 // Audio Components - Initialized to null or default
 let audioContext = null;
@@ -162,7 +162,21 @@ function updateParticles() {
 }
 
 function analyzeAudio() {
-    if (!analyser) return { bassAverage: 0, trebleAverage: 0, isBeat: false };
+    if (!analyser) {
+        // This should ideally not be hit if audioReady logic is correct,
+        // but it's a good safeguard.
+        console.warn("analyzeAudio called when analyser is not initialized");
+        // Returning a default object structure to prevent errors in the caller
+        // if it expects an object, though the primary guard is 'audioReady' in animate().
+        // However, the subtask explicitly asks for a simple return here.
+        return; 
+    }
+
+    // Ensure dataArray is also initialized
+    if (!dataArray) {
+        console.warn("analyzeAudio called when dataArray is not initialized");
+        return;
+    }
 
     analyser.getByteFrequencyData(dataArray);
 
@@ -215,30 +229,32 @@ function animate() {
         renderer.render(scene, camera);
     }
 
-    // If not initialized (audio not loaded/ready), skip audio processing and particle logic
-    if (!isInitialized) {
-        return;
-    }
+    // CRITICAL: Only proceed with audio analysis and particle updates if audio is fully set up
+    if (audioReady) {
+        // These functions should internally also check if 'analyser' is valid
+        // as an additional safeguard, though 'audioReady' is the primary gate.
+        
+        // --- All audio processing and particle update logic below this point ---
+        let audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
+        // Ensure analyser and audioContext are valid before trying to use them
+        // analyzeAudio() itself checks if analyser is null.
+        if (analyser && audioContext && audioContext.state === 'running') {
+            audioFeatures = analyzeAudio(); 
+        }
 
-    // --- All audio processing and particle update logic below this point ---
-    let audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
-    // Ensure analyser and audioContext are valid before trying to use them
-    if (analyser && audioContext && audioContext.state === 'running') {
-        audioFeatures = analyzeAudio(); // This function already checks if analyser is null
-    }
-
-    // Particle Emission Logic - only if analyser is ready (implies audio loaded)
-    if (analyser) { 
-        const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
-        for (let i = 0; i < particlesToEmit; i++) {
-            if (Math.random() < 0.8 || beatDetectedThisFrame) {
-                emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
+        // Particle Emission Logic - only if analyser is ready (implies audio loaded and audioReady is true)
+        if (analyser) { 
+            const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
+            for (let i = 0; i < particlesToEmit; i++) {
+                if (Math.random() < 0.8 || beatDetectedThisFrame) {
+                    emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
+                }
             }
         }
+        
+        updateParticles(); // This function already checks if particlesMesh is null
     }
-    
-    updateParticles(); // This function already checks if particlesMesh is null
-    // renderer.render(scene, camera); // Moved to the top of the function
+    // renderer.render(scene, camera); // Already moved to the top of the function
 }
 
 // Initialize and start animation
@@ -247,58 +263,116 @@ initFountainParticles(); // Initialize our new particle system
 animate();
 
 // --- Audio Setup ---
-// audioContext, analyser, source are now declared at the top.
 const audioFileElement = document.getElementById('audioFile');
 
 audioFileElement.addEventListener('change', function(event) {
-    if (event.target.files.length === 0) {
-        return;
-    }
-    const file = event.target.files[0];
-    const reader = new FileReader();
+    audioReady = false; // Immediately stop current processing
+    console.log("New file selected. audioReady set to false.");
 
-    reader.onload = function(fileEvent) {
-        const arrayBuffer = fileEvent.target.result;
+    let closePromise = Promise.resolve();
 
-        if (audioContext && audioContext.state === 'running') {
-            audioContext.close(); // Close previous context before creating a new one
-        }
-        audioContext = new AudioContext();
-        
+    if (audioContext) {
+        console.log("Existing AudioContext found. Attempting to close.");
         if (source) {
-            source.disconnect(); // Disconnect old source
+            console.log("Existing source found. Stopping and disconnecting.");
+            try {
+                source.stop();
+            } catch (e) {
+                console.warn("Error stopping source (already stopped?):", e);
+            }
+            source.disconnect();
+            source = null;
         }
-
-        audioContext.decodeAudioData(arrayBuffer, function(buffer) {
-            source = audioContext.createBufferSource();
-            source.buffer = buffer;
-
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = ANALYSER_FFT_SIZE; 
-            dataArray = new Uint8Array(analyser.frequencyBinCount); // Initialize dataArray
-
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
-            
-            // Reset beat detection history for new song
-            energyHistory.fill(0);
-            lastBeatTime = 0;
-
-            source.start(0);
-            console.log("Audio playing");
-            // Ensure camera is correctly positioned if it was changed by user interaction (not implemented here)
-            camera.lookAt(scene.position); 
-
-            isInitialized = true; // Set the flag: audio is ready, visualization can fully start
-            console.log("Initialization complete. Starting full visualization.");
-
-        }, function(e) {
-            console.error("Error decoding audio data", e);
-            isInitialized = false; // Ensure flag is false if decoding fails
+        // Assign the promise for closing the AudioContext
+        closePromise = audioContext.close().then(() => {
+            console.log("Previous AudioContext closed successfully.");
+        }).catch(err => {
+            console.error("Error closing previous AudioContext:", err);
+            // If closing fails, we still want to proceed, but log it.
         });
-    };
+        audioContext = null; // Nullify immediately after initiating close
+    }
 
-    reader.readAsArrayBuffer(file);
+    closePromise.then(() => {
+        const file = event.target.files[0];
+        if (!file) {
+            console.log("No file selected after context handling.");
+            audioReady = false; // Ensure it remains false
+            return;
+        }
+        console.log("Processing new file:", file.name);
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            console.log("File loaded by FileReader. Creating new AudioContext.");
+            // Create a new AudioContext for the new file
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // It's important to create analyser here, associated with the new context
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = ANALYSER_FFT_SIZE;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            console.log("Decoding audio data...");
+            audioContext.decodeAudioData(e.target.result, function(buffer) {
+                console.log("Audio data decoded successfully.");
+                // Defensive cleanup of source, though it should be null
+                if (source) {
+                    console.warn("Source was not null before creating new source. Cleaning up.");
+                    try { source.stop(); } catch (e) { /* ignore */ }
+                    source.disconnect();
+                }
+
+                source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                // Reset beat detection history for new song
+                energyHistory.fill(0);
+                lastBeatTime = 0;
+                console.log("Beat detection history reset.");
+
+                source.start(0);
+                console.log("Audio playing.");
+                
+                audioReady = true; // SUCCESS!
+                console.log("audioReady set to true. Visualization can start.");
+
+                // Ensure camera is correctly positioned (optional, but good for consistency)
+                if (camera && scene) camera.lookAt(scene.position);
+
+            }, function(error) {
+                console.error('Error decoding audio data:', error);
+                audioReady = false; // FAILURE
+                if (audioContext) {
+                    audioContext.close().then(() => {
+                        console.log("Cleaned up new AudioContext after decoding error.");
+                    }).catch(err => {
+                        console.error("Error closing new AudioContext after decoding error:", err);
+                    });
+                    audioContext = null;
+                }
+                analyser = null; // Also nullify analyser if it was created
+                dataArray = null;
+            });
+        };
+        reader.onerror = function(err) {
+            console.error("FileReader error:", err);
+            audioReady = false;
+            if (audioContext) { // If context was created before reader error
+                audioContext.close();
+                audioContext = null;
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }).catch(err => {
+        // This catch is for errors from the closePromise itself,
+        // though we made it always resolve in the example by catching inside.
+        // For robustness, it's here.
+        console.error('Unhandled error in audio setup promise chain:', err);
+        audioReady = false;
+    });
 });
 
-console.log("main.js loaded with fountain particle system and audio analysis.");
+console.log("main.js loaded with updated audio event listener.");
