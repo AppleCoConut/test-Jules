@@ -1,16 +1,25 @@
 html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    background-color: #E0E0E0; /* Light grey page background */
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #121212; /* Dark theme background */
+  color: #e0e0e0; /* Light text color */
+  overflow: auto; /* Allow scrolling if content exceeds viewport */
 }
 
 #visualizerCanvas {
-    width: 80vw; /* 80% of viewport width */
-    height: 70vh; /* 70% of viewport height */
-    display: block; /* Important for sizing and margin */
-    border: 5px solid red; /* Thick red border */
-    background-color: blue; /* Bright blue canvas background */
-    margin: 20px; /* Margin to see it separate from page edges */
+  width: 100%; /* Full width of its container */
+  height: 80vh; /* 80% of viewport height */
+  display: block; /* Ensure it behaves as a block element */
+  border: 3px solid lime; /* Temporary border to confirm this CSS is loaded */
+  /* Previous debugging styles like background-color: #222222; or specific margins are removed */
+}
+
+.input-container { /* This can remain for now, will be removed from HTML later */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background-color: #1e1e1e; /* Slightly lighter background for the input area */
 }
