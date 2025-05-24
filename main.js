@@ -22,9 +22,10 @@ const MAX_PARTICLES = 8000;
 const PARTICLE_LIFESPAN = 3.0;
 const GRAVITY = -0.012;
 const PARTICLE_ORIGIN_Y = -3;
-const PARTICLE_SIZE = 0.06; 
+const PARTICLE_SIZE = 0.1; // Adjusted for debugging visibility
 const ANALYSER_FFT_SIZE = 512;
-console.log("Global PARTICLE_ORIGIN_Y:", PARTICLE_ORIGIN_Y); // Log for PARTICLE_ORIGIN_Y
+console.log("Global PARTICLE_ORIGIN_Y:", PARTICLE_ORIGIN_Y); 
+console.log("Global PARTICLE_SIZE set to 0.1 for debugging visibility."); // New log for particle size
 
 // Beat Detection
 const BEAT_TRESHOLD_MULTIPLIER = 1.35;
@@ -58,8 +59,8 @@ function initThreeJS() {
     console.log(`initThreeJS: Renderer size set to: ${canvas.clientWidth}w x ${canvas.clientHeight}h`);
 
     // Set Renderer Clear Color
-    renderer.setClearColor(0x113355); // A distinct dark blue
-    console.log("initThreeJS: Renderer clear color set to dark blue (0x113355).");
+    renderer.setClearColor(0x000000); // Set to black
+    console.log("initThreeJS: Renderer clear color set to black (0x000000).");
 
     // Log Renderer Instance
     console.log("initThreeJS: Renderer instance:", renderer);
@@ -72,7 +73,8 @@ function initThreeJS() {
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
     camera.position.set(0, 0, 10); // Restored original camera position for the fountain
     camera.lookAt(0, 0, 0); // Look at the origin (or scene.position)
-    console.log(`initThreeJS: PerspectiveCamera created. Position: (0,0,10), Aspect: ${camera.aspect}`, camera);
+    // console.log(`initThreeJS: PerspectiveCamera created. Position: (0,0,10), Aspect: ${camera.aspect}`, camera); // Old log
+    console.log(`initThreeJS: Camera properties - near: ${camera.near}, far: ${camera.far}, fov: ${camera.fov}, aspect: ${camera.aspect.toFixed(2)}, position: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`);
 
     // Test Cube Re-verification (after scene and camera) - NOW COMMENTED OUT
     // const cubeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
@@ -127,17 +129,17 @@ function initFountainParticles() {
     particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Restore original particle material
+    // Modified particle material for debugging visibility
     const particleMaterial = new THREE.PointsMaterial({
-        size: PARTICLE_SIZE,
-        vertexColors: true, 
-        transparent: true,
-        opacity: 0.8, 
-        blending: THREE.AdditiveBlending,
-        depthWrite: false, // Added as suggested
+        size: PARTICLE_SIZE,       // Should now use the 0.1 value
+        vertexColors: true,        // Must be true
+        transparent: false,        // Set to false for initial opaque visibility test
+        opacity: 1.0,              // Opacity is 1.0
+        blending: THREE.NormalBlending, // Change to NormalBlending for simpler rendering
+        depthWrite: false          // Keep as false
     });
-    // Updated log to match subtask format
-    console.log("initFountainParticles: Particle material created with size:", particleMaterial.size, "vertexColors:", particleMaterial.vertexColors, "opacity:", particleMaterial.opacity, "blending:", particleMaterial.blending, "depthWrite:", particleMaterial.depthWrite);
+    // Updated log for material properties
+    console.log(`initFountainParticles: Particle material created - size: ${particleMaterial.size}, vertexColors: ${particleMaterial.vertexColors}, transparent: ${particleMaterial.transparent}, opacity: ${particleMaterial.opacity}, blending: ${particleMaterial.blending}, depthWrite: ${particleMaterial.depthWrite}`);
 
     particlesMesh = new THREE.Points(particlesGeometry, particleMaterial); 
     scene.add(particlesMesh);
@@ -183,13 +185,25 @@ function emitParticle(bassAvg, trebleAvg, isBeat) {
     );
 
     // Color influenced by treble - Tuned for vibrant, modern feel
-    const trebleNormalized = Math.min(trebleAvg / 180, 1.0); // Adjusted treble sensitivity
-    if (isBeat) {
-        // Flashy reds, oranges, yellows on beat
-        particle.color.setHSL(Math.random() * 0.15 + 0.0, 1.0, 0.75); 
-    } else {
-        // Normal particles: Cool base (cyan/blue) moving to warmer (light purple/pink) with treble
-        particle.color.setHSL(0.55 + trebleNormalized * 0.20, 0.9, 0.6 + trebleNormalized * 0.15);
+    // const trebleNormalized = Math.min(trebleAvg / 180, 1.0); // Adjusted treble sensitivity
+    // if (isBeat) {
+    //     // Flashy reds, oranges, yellows on beat
+    //     particle.color.setHSL(Math.random() * 0.15 + 0.0, 1.0, 0.75); 
+    // } else {
+    //     // Normal particles: Cool base (cyan/blue) moving to warmer (light purple/pink) with treble
+    //     particle.color.setHSL(0.55 + trebleNormalized * 0.20, 0.9, 0.6 + trebleNormalized * 0.15);
+    // }
+
+    // --- Force color to white for debugging visibility ---
+    particle.color.setRGB(1.0, 1.0, 1.0); // Set internal THREE.Color object to white
+
+    if (particleIndex !== -1 && colors) { // 'colors' is the global Float32Array for the color attribute
+        const colorOffset = particleIndex * 3;
+        colors[colorOffset + 0] = 1.0; // R
+        colors[colorOffset + 1] = 1.0; // G
+        colors[colorOffset + 2] = 1.0; // B
+        // Note: particlesMesh.geometry.attributes.color.needsUpdate will be set in updateParticles()
+        console.log(`emitParticle: Setting particle ${particleIndex} (array offset ${colorOffset}) color to WHITE.`);
     }
     // --- End of Original Audio-Reactive Particle Properties ---
 
