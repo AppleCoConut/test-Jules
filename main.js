@@ -30,6 +30,7 @@ const PARTICLE_LIFESPAN = 3.0; // Increased for hang time
 const GRAVITY = -0.012; // Reduced for more hang time
 const PARTICLE_ORIGIN_Y = -3;
 const PARTICLE_SIZE = 0.06; // Slightly larger particles
+const ANALYSER_FFT_SIZE = 512; // Defined FFT size for analyser
 
 // Beat Detection
 const BEAT_TRESHOLD_MULTIPLIER = 1.35; // Slightly higher to catch more significant peaks
@@ -39,14 +40,20 @@ let energyHistory = new Array(30).fill(0); // For running average of energy
 let energyHistoryIndex = 0;
 let beatDetectedThisFrame = false;
 
-// Audio Data
-let dataArray; // Uint8Array for frequency data
+// Initialization Flag
+let isInitialized = false;
+
+// Audio Components - Initialized to null or default
+let audioContext = null;
+let analyser = null;
+let source = null;
+let dataArray = null; // Uint8Array for frequency data, will be initialized after analyser
 
 // --- Particle System Variables ---
-let particlePool = [];
-let particlesMesh;
-let positions;
-let colors;
+let particlePool = []; // Will be populated in initFountainParticles
+let particlesMesh = null; // Will be created in initFountainParticles
+let positions = null; // Float32Array for particle positions
+let colors = null; // Float32Array for particle colors
 
 function initFountainParticles() {
     const particlesGeometry = new THREE.BufferGeometry();
@@ -203,24 +210,35 @@ function analyzeAudio() {
 function animate() {
     requestAnimationFrame(animate);
 
-    let audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
-    if (analyser && audioContext && audioContext.state === 'running') {
-        audioFeatures = analyzeAudio();
+    // Always render the scene if basic Three.js components are ready
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
     }
 
-    // Particle Emission Logic
-    if (analyser) { // Only emit if audio is playing and analyser is ready
-        // Increased particle emission rates, more sensitive to bass
-        const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30) ; 
+    // If not initialized (audio not loaded/ready), skip audio processing and particle logic
+    if (!isInitialized) {
+        return;
+    }
+
+    // --- All audio processing and particle update logic below this point ---
+    let audioFeatures = { bassAverage: 0, trebleAverage: 0, isBeat: false };
+    // Ensure analyser and audioContext are valid before trying to use them
+    if (analyser && audioContext && audioContext.state === 'running') {
+        audioFeatures = analyzeAudio(); // This function already checks if analyser is null
+    }
+
+    // Particle Emission Logic - only if analyser is ready (implies audio loaded)
+    if (analyser) { 
+        const particlesToEmit = beatDetectedThisFrame ? 25 + Math.floor(audioFeatures.bassAverage / 15) : 2 + Math.floor(audioFeatures.bassAverage / 30);
         for (let i = 0; i < particlesToEmit; i++) {
-             if (Math.random() < 0.8 || beatDetectedThisFrame) { // Increased general emission probability
+            if (Math.random() < 0.8 || beatDetectedThisFrame) {
                 emitParticle(audioFeatures.bassAverage, audioFeatures.trebleAverage, beatDetectedThisFrame);
-             }
+            }
         }
     }
     
-    updateParticles();
-    renderer.render(scene, camera);
+    updateParticles(); // This function already checks if particlesMesh is null
+    // renderer.render(scene, camera); // Moved to the top of the function
 }
 
 // Initialize and start animation
@@ -229,7 +247,7 @@ initFountainParticles(); // Initialize our new particle system
 animate();
 
 // --- Audio Setup ---
-let audioContext, analyser, source;
+// audioContext, analyser, source are now declared at the top.
 const audioFileElement = document.getElementById('audioFile');
 
 audioFileElement.addEventListener('change', function(event) {
@@ -256,7 +274,7 @@ audioFileElement.addEventListener('change', function(event) {
             source.buffer = buffer;
 
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 512; // Increased FFT size for better frequency resolution
+            analyser.fftSize = ANALYSER_FFT_SIZE; 
             dataArray = new Uint8Array(analyser.frequencyBinCount); // Initialize dataArray
 
             source.connect(analyser);
@@ -271,9 +289,12 @@ audioFileElement.addEventListener('change', function(event) {
             // Ensure camera is correctly positioned if it was changed by user interaction (not implemented here)
             camera.lookAt(scene.position); 
 
+            isInitialized = true; // Set the flag: audio is ready, visualization can fully start
+            console.log("Initialization complete. Starting full visualization.");
 
         }, function(e) {
             console.error("Error decoding audio data", e);
+            isInitialized = false; // Ensure flag is false if decoding fails
         });
     };
 
