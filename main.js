@@ -311,6 +311,7 @@ async function loadAndPlayAudioFromURL(audioURL) {
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log("loadAndPlayAudioFromURL: New AudioContext created.", audioContext);
+        console.log("loadAndPlayAudioFromURL: AudioContext initial state:", audioContext.state); // Log 1
 
         // 3. Fetch Audio Data
         console.log("loadAndPlayAudioFromURL: About to fetch."); // Log 2
@@ -346,9 +347,13 @@ async function loadAndPlayAudioFromURL(audioURL) {
         console.log("loadAndPlayAudioFromURL: Setting up Analyser and Source.");
         analyser = audioContext.createAnalyser();
         analyser.fftSize = ANALYSER_FFT_SIZE; // Use existing constant
+        
+        // Log AnalyserNode properties
+        console.log(`loadAndPlayAudioFromURL: AnalyserNode properties - fftSize: ${analyser.fftSize}, frequencyBinCount: ${analyser.frequencyBinCount}, minDecibels: ${analyser.minDecibels}, maxDecibels: ${analyser.maxDecibels}, smoothingTimeConstant: ${analyser.smoothingTimeConstant}`);
+        
         // Initialize dataArray based on new analyser settings
         dataArray = new Uint8Array(analyser.frequencyBinCount);
-        console.log("loadAndPlayAudioFromURL: Analyser created, dataArray initialized.");
+        console.log("loadAndPlayAudioFromURL: Analyser created (with properties logged), dataArray initialized.");
 
         source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
@@ -363,6 +368,20 @@ async function loadAndPlayAudioFromURL(audioURL) {
         // 7. Start playback
         console.log("loadAndPlayAudioFromURL: About to call source.start(0)."); // Log 9
         source.start(0);
+
+        // Attempt to Resume AudioContext After source.start(0)
+        if (audioContext.state === 'suspended') {
+            console.log("loadAndPlayAudioFromURL: AudioContext is suspended after source.start(), attempting to resume...");
+            try {
+                await audioContext.resume(); // Use await as we are in an async function
+                console.log("loadAndPlayAudioFromURL: AudioContext resumed successfully. Current state:", audioContext.state);
+            } catch (err) {
+                console.error("loadAndPlayAudioFromURL: Error resuming AudioContext:", err);
+            }
+        } else {
+            console.log("loadAndPlayAudioFromURL: AudioContext state (after source.start):", audioContext.state);
+        }
+
         // console.log("Audio playing from URL. audioReady = true."); // Covered by next log
         audioReady = true;
         console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE."); // Log 7b
