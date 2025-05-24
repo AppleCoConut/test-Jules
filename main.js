@@ -1,4 +1,9 @@
 console.log("main.js: Script start");
+
+// DOM Element References for Audio Interaction Overlay
+const audioNoticeOverlay = document.getElementById('audioNoticeOverlay');
+const startAudioButton = document.getElementById('startAudioButton');
+
 // Step 1: Set up basic Three.js scene, camera, and WebGLRenderer
 let scene, camera, renderer;
 let audioReady = false; 
@@ -369,27 +374,42 @@ async function loadAndPlayAudioFromURL(audioURL) {
         console.log("loadAndPlayAudioFromURL: About to call source.start(0)."); // Log 9
         source.start(0);
 
-        // Attempt to Resume AudioContext After source.start(0)
-        if (audioContext.state === 'suspended') {
-            console.log("loadAndPlayAudioFromURL: AudioContext is suspended after source.start(), attempting to resume...");
-            try {
-                await audioContext.resume(); // Use await as we are in an async function
-                console.log("loadAndPlayAudioFromURL: AudioContext resumed successfully. Current state:", audioContext.state);
-            } catch (err) {
-                console.error("loadAndPlayAudioFromURL: Error resuming AudioContext:", err);
+        // New robust logic for AudioContext state check and resume
+        console.log("loadAndPlayAudioFromURL: Checking AudioContext state post source.start(). Current state:", audioContext.state);
+        if (audioContext.state === 'running') {
+            console.log("loadAndPlayAudioFromURL: Context is already running. Setting audioReady = true.");
+            audioReady = true; // Set audioReady
+            console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE (context was running).");
+            if (typeof resetBeatDetectionHistory === 'function') { // Check if function exists
+                resetBeatDetectionHistory();
             }
         } else {
-            console.log("loadAndPlayAudioFromURL: AudioContext state (after source.start):", audioContext.state);
+            console.log("loadAndPlayAudioFromURL: Context is `" + audioContext.state + "`. Attempting to resume...");
+            try {
+                await audioContext.resume(); // Use await as we are in an async function
+                console.log("loadAndPlayAudioFromURL: AudioContext.resume() promise resolved. New state:", audioContext.state);
+                if (audioContext.state === 'running') {
+                    audioReady = true; // Set audioReady
+                    console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE (after successful resume).");
+                    if (typeof resetBeatDetectionHistory === 'function') { // Check if function exists
+                        resetBeatDetectionHistory();
+                    }
+                } else {
+                    console.warn("loadAndPlayAudioFromURL: AudioContext state is still not 'running' after resume. State:", audioContext.state);
+                    audioReady = false; // Explicitly ensure audioReady is false
+                    if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
+                        showAudioInteractionOverlay();
+                    }
+                }
+            } catch (err) {
+                console.error("loadAndPlayAudioFromURL: Error during audioContext.resume():", err);
+                audioReady = false; // Explicitly ensure audioReady is false
+                if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
+                    showAudioInteractionOverlay();
+                }
+            }
         }
-
-        // console.log("Audio playing from URL. audioReady = true."); // Covered by next log
-        audioReady = true;
-        console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE."); // Log 7b
-
-        // Reset beat detection history if applicable
-        if (typeof resetBeatDetectionHistory === 'function') {
-            resetBeatDetectionHistory();
-        }
+        // End of new robust logic
 
     } catch (error) {
         console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK:", error); // Log 10
@@ -457,6 +477,82 @@ console.log("main.js: Initial animate() call made.");
 
 // --- Audio Setup ---
 // No audioFile event listener - audio will be loaded via URL
+
+// --- Audio Interaction Overlay Logic ---
+function showAudioInteractionOverlay() {
+    if (audioNoticeOverlay) {
+        audioNoticeOverlay.style.display = 'block'; // Or 'flex'
+        console.log("Audio interaction overlay shown.");
+    } else {
+        console.warn("showAudioInteractionOverlay: #audioNoticeOverlay element not found.");
+    }
+}
+
+function hideAudioInteractionOverlay() {
+    if (audioNoticeOverlay) {
+        audioNoticeOverlay.style.display = 'none';
+        console.log("Audio interaction overlay hidden.");
+    }
+}
+
+function handleAudioInteraction() {
+    console.log("handleAudioInteraction called.");
+    if (!audioContext) { 
+        console.warn("handleAudioInteraction: AudioContext is not yet created. Attempting to load audio first.");
+        loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3"); 
+        hideAudioInteractionOverlay(); 
+        return;
+    }
+
+    if (audioContext.state === 'closed') {
+        console.warn("handleAudioInteraction: AudioContext is closed. Re-creating and loading audio.");
+        loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3"); 
+        hideAudioInteractionOverlay(); 
+        return;
+    }
+
+    if (audioContext.state === 'suspended') {
+        console.log("User interaction: AudioContext is suspended, attempting to resume...");
+        audioContext.resume().then(() => {
+            console.log("User interaction: AudioContext.resume() promise resolved. New state:", audioContext.state);
+            if (audioContext.state === 'running') {
+                audioReady = true; 
+                console.log("User interaction: audioReady definitively set to TRUE.");
+                if (typeof resetBeatDetectionHistory === 'function') {
+                    resetBeatDetectionHistory();
+                }
+                hideAudioInteractionOverlay();
+            } else {
+                console.warn("User interaction: Resume completed, but context still not 'running'. State:", audioContext.state);
+            }
+        }).catch(err => {
+            console.error("User interaction: Error resuming AudioContext:", err);
+        });
+    } else if (audioContext.state === 'running') {
+        console.log("User interaction: AudioContext already running.");
+        audioReady = true; 
+        hideAudioInteractionOverlay();
+    }
+}
+
+if (startAudioButton) {
+    startAudioButton.addEventListener('click', function(event) {
+        event.stopPropagation(); 
+        handleAudioInteraction();
+    });
+    console.log("Event listener added to #startAudioButton.");
+} else {
+    console.warn("#startAudioButton element not found for event listener.");
+}
+
+if (audioNoticeOverlay) {
+    audioNoticeOverlay.addEventListener('click', handleAudioInteraction);
+    console.log("Event listener added to #audioNoticeOverlay.");
+} else {
+    console.warn("#audioNoticeOverlay element not found for event listener.");
+}
+
+// --- End of Audio Interaction Overlay Logic ---
 
 loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3");
 
