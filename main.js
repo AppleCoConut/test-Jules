@@ -1,14 +1,14 @@
 console.log("main.js: Script start");
 
-// DOM Element References for Audio Interaction Overlay
-const audioNoticeOverlay = document.getElementById('audioNoticeOverlay');
-const startAudioButton = document.getElementById('startAudioButton');
-console.log("main.js: Reference to #audioNoticeOverlay:", audioNoticeOverlay);
-console.log("main.js: Reference to #startAudioButton:", startAudioButton);
+// DOM Element Reference for the new on-canvas button
+const onCanvasStartButton = document.getElementById('onCanvasStartButton');
+console.log("main.js: Reference to #onCanvasStartButton:", onCanvasStartButton);
 
 // Step 1: Set up basic Three.js scene, camera, and WebGLRenderer
 let scene, camera, renderer;
 let audioReady = false; 
+let audioDataLoaded = false; // New flag
+let sourceWasStarted = false; // Flag to track if source.start(0) has been called
 // let frameCount = 0; // Removed for this task
 
 // Audio Components - Initialized to null or default
@@ -290,9 +290,10 @@ function resetBeatDetectionHistory() {
 }
 
 async function loadAndPlayAudioFromURL(audioURL) {
-    console.log("loadAndPlayAudioFromURL: Called with URL:", audioURL); // Log 1
-    audioReady = false; // Reset audio readiness
-    console.log("loadAndPlayAudioFromURL: audioReady set to false initially.");
+    console.log("loadAndPlayAudioFromURL: Called with URL:", audioURL);
+    audioReady = false; // Still used by animate loop, but not set to true here
+    audioDataLoaded = false; // Reset this new flag
+    console.log("loadAndPlayAudioFromURL: audioReady & audioDataLoaded set to false initially.");
 
     // 1. Cleanup existing AudioContext and Source if they exist
     if (source) {
@@ -343,7 +344,8 @@ async function loadAndPlayAudioFromURL(audioURL) {
                 },
                 (error) => { // Error callback
                     console.error("loadAndPlayAudioFromURL: decodeAudioData FAILED:", error); // Log 8
-                    audioReady = false; // Ensure audioReady is false on decode failure
+                    // audioReady = false; // Not set here anymore
+                    audioDataLoaded = false; // Ensure this is false on decode failure
                     reject(error);
                 }
             );
@@ -372,78 +374,40 @@ async function loadAndPlayAudioFromURL(audioURL) {
         analyser.connect(audioContext.destination);
         console.log("loadAndPlayAudioFromURL: Source connected to Analyser, Analyser to Destination.");
 
-        // 7. Start playback
-        console.log("loadAndPlayAudioFromURL: About to call source.start(0)."); // Log 9
-        source.start(0);
+        // 7. Data loaded and graph prepared. DO NOT START PLAYBACK.
+        audioDataLoaded = true;
+        console.log("loadAndPlayAudioFromURL: Audio data loaded and decoded successfully. audioDataLoaded = true.");
 
-        // New robust logic for AudioContext state check and resume
-        console.log("loadAndPlayAudioFromURL: Checking AudioContext state post source.start(). Current state:", audioContext.state);
-        if (audioContext.state === 'running') {
-            console.log("loadAndPlayAudioFromURL: Context is already running. Setting audioReady = true.");
-            audioReady = true; // Set audioReady
-            console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE (context was running).");
-            if (typeof resetBeatDetectionHistory === 'function') { // Check if function exists
-                resetBeatDetectionHistory();
-            }
+        // Make the #onCanvasStartButton visible
+        if (onCanvasStartButton) { // onCanvasStartButton is the global const
+            onCanvasStartButton.style.display = 'block'; // Or 'inline-block'
+            console.log("loadAndPlayAudioFromURL: #onCanvasStartButton display set to 'block'.");
         } else {
-            console.log("loadAndPlayAudioFromURL: Context is `" + audioContext.state + "`. Attempting to resume...");
-            try {
-                await audioContext.resume(); // Use await as we are in an async function
-                console.log("loadAndPlayAudioFromURL: AudioContext.resume() promise resolved. New state:", audioContext.state);
-                if (audioContext.state === 'running') {
-                    audioReady = true; // Set audioReady
-                    console.log("loadAndPlayAudioFromURL: audioReady definitively set to TRUE (after successful resume).");
-                    if (typeof resetBeatDetectionHistory === 'function') { // Check if function exists
-                        resetBeatDetectionHistory();
-                    }
-                } else {
-                    console.warn("loadAndPlayAudioFromURL: AudioContext state is still not 'running' after resume. State:", audioContext.state);
-                    audioReady = false; // Explicitly ensure audioReady is false
-                    console.log("loadAndPlayAudioFromURL: Condition met to show overlay (state not 'running' post-resume). audioContext.state:", audioContext.state, "Calling showAudioInteractionOverlay()...");
-                    if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
-                        showAudioInteractionOverlay();
-                    }
-                }
-            } catch (err) {
-                console.error("loadAndPlayAudioFromURL: Error during audioContext.resume():", err);
-                audioReady = false; // Explicitly ensure audioReady is false
-                console.log("loadAndPlayAudioFromURL: Condition met to show overlay (error during resume). Error:", err, "Calling showAudioInteractionOverlay()...");
-                if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
-                    showAudioInteractionOverlay();
-                }
-            }
+            console.warn("loadAndPlayAudioFromURL: #onCanvasStartButton element not found, cannot make it visible.");
         }
-        // End of new robust logic
+        // NO source.start(0);
+        // NO audioContext.resume();
+        // NO audioReady = true;
+        // NO showAudioInteractionOverlay() or hideAudioInteractionOverlay() calls
+        // NO resetBeatDetectionHistory() call here, will be called by interaction handler
 
     } catch (error) {
-        console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK error:", error); // Ensure 'error' is logged
-        audioReady = false; // Already present, ensure it stays
+        console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK error:", error);
+        // audioReady = false; // audioReady is not the primary flag here anymore
+        audioDataLoaded = false; // Ensure this is false on any error in the loading process
 
-        // Attempt to close audioContext if it exists and isn't already closed
         if (audioContext && audioContext.state !== 'closed') {
-            try {
-                // No 'await' here if we don't want the catch block to be async itself,
-                // or add 'async' to the catch block if necessary, but typically not done.
-                // For simplicity, fire-and-forget close or make this outer catch also async if critical.
-                // However, the main goal is to show the overlay.
-                audioContext.close().then(() => {
-                    console.log("loadAndPlayAudioFromURL: AudioContext closed in main catch block.");
-                }).catch(e => {
-                    console.error("loadAndPlayAudioFromURL: Error closing AudioContext in main catch block:", e);
-                });
-            } catch (e) { // Catch synchronous errors from calling close() itself, though unlikely
-                console.error("loadAndPlayAudioFromURL: Synchronous error calling audioContext.close() in main catch:", e);
-            }
+            audioContext.close().then(() => {
+                console.log("loadAndPlayAudioFromURL: AudioContext closed in main catch block due to error.");
+            }).catch(e => {
+                console.error("loadAndPlayAudioFromURL: Error closing AudioContext in main catch block:", e);
+            });
         }
-        audioContext = null; // Already present, ensure it stays
-
-        // Add the call to showAudioInteractionOverlay
-        if (typeof showAudioInteractionOverlay === 'function') {
-            console.log("loadAndPlayAudioFromURL: Main catch block calling showAudioInteractionOverlay()."); // Add this log
-            showAudioInteractionOverlay();
-        } else {
-            console.error("loadAndPlayAudioFromURL: showAudioInteractionOverlay function not found in main catch block!"); // Should not happen
-        }
+        audioContext = null; 
+        // Do NOT show the #onCanvasStartButton if loading fails.
+        // If an overlay was shown by a previous attempt, it might still be there,
+        // or the user might need to re-trigger if a new interaction mechanism is added for errors.
+        // For now, just log the error and ensure flags are reset.
     }
 }
 
@@ -498,83 +462,78 @@ console.log("main.js: Initial animate() call made.");
 // --- Audio Setup ---
 // No audioFile event listener - audio will be loaded via URL
 
-// --- Audio Interaction Overlay Logic ---
-function showAudioInteractionOverlay() {
-    console.log("showAudioInteractionOverlay: Function called.");
-    if (audioNoticeOverlay) { // audioNoticeOverlay is the global const
-        console.log("showAudioInteractionOverlay: #audioNoticeOverlay DOM element IS found. Current display style (before change):", audioNoticeOverlay.style.display);
-        audioNoticeOverlay.style.display = 'block'; // Or 'flex' if it's a flex container and needs to be for centering
-        console.log("showAudioInteractionOverlay: Set display to 'block'. New display style (after change):", audioNoticeOverlay.style.display);
-    } else {
-        console.error("showAudioInteractionOverlay: #audioNoticeOverlay DOM element NOT FOUND when trying to show it! Check ID and script load order if 'Reference to #audioNoticeOverlay' log at top of main.js was null.");
-    }
-}
+// --- Audio Interaction Logic (New: Centered around onCanvasStartButton and startAudioFromButtonClick) ---
+async function startAudioFromButtonClick() {
+    console.log("startAudioFromButtonClick function called.");
 
-function hideAudioInteractionOverlay() {
-    if (audioNoticeOverlay) {
-        audioNoticeOverlay.style.display = 'none';
-        console.log("Audio interaction overlay hidden.");
-    }
-}
-
-function handleAudioInteraction() {
-    console.log("handleAudioInteraction called.");
-    if (!audioContext) { 
-        console.warn("handleAudioInteraction: AudioContext is not yet created. Attempting to load audio first.");
-        loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3"); 
-        hideAudioInteractionOverlay(); 
+    if (!audioDataLoaded || !audioContext) {
+        console.error("startAudioFromButtonClick: Audio data not loaded or AudioContext not ready. Cannot start.");
         return;
     }
 
     if (audioContext.state === 'closed') {
-        console.warn("handleAudioInteraction: AudioContext is closed. Re-creating and loading audio.");
-        loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3"); 
-        hideAudioInteractionOverlay(); 
+        console.error("startAudioFromButtonClick: AudioContext is closed. Attempting to reload all audio.");
+        if (onCanvasStartButton) onCanvasStartButton.style.display = 'none'; 
+        await loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3"); 
         return;
     }
 
+    console.log("startAudioFromButtonClick: Current AudioContext state:", audioContext.state);
     if (audioContext.state === 'suspended') {
-        console.log("User interaction: AudioContext is suspended, attempting to resume...");
-        audioContext.resume().then(() => {
-            console.log("User interaction: AudioContext.resume() promise resolved. New state:", audioContext.state);
-            if (audioContext.state === 'running') {
-                audioReady = true; 
-                console.log("User interaction: audioReady definitively set to TRUE.");
-                if (typeof resetBeatDetectionHistory === 'function') {
-                    resetBeatDetectionHistory();
-                }
-                hideAudioInteractionOverlay();
-            } else {
-                console.warn("User interaction: Resume completed, but context still not 'running'. State:", audioContext.state);
+        console.log("startAudioFromButtonClick: AudioContext is suspended, attempting to resume...");
+        try {
+            await audioContext.resume();
+            console.log("startAudioFromButtonClick: AudioContext.resume() promise resolved. New state:", audioContext.state);
+        } catch (err) {
+            console.error("startAudioFromButtonClick: Error during audioContext.resume():", err);
+            return; 
+        }
+    }
+
+    if (audioContext.state === 'running') {
+        if (source && !sourceWasStarted) {
+            try {
+                source.start(0);
+                sourceWasStarted = true; 
+                console.log("startAudioFromButtonClick: source.start(0) called successfully.");
+            } catch (err) {
+                console.error("startAudioFromButtonClick: Error calling source.start(0):", err);
+                return; 
             }
-        }).catch(err => {
-            console.error("User interaction: Error resuming AudioContext:", err);
-        });
-    } else if (audioContext.state === 'running') {
-        console.log("User interaction: AudioContext already running.");
+        } else if (source && sourceWasStarted) {
+            console.log("startAudioFromButtonClick: Source already started previously.");
+        } else {
+            console.error("startAudioFromButtonClick: Source node not available to start.");
+            return; 
+        }
+
         audioReady = true; 
-        hideAudioInteractionOverlay();
+        console.log("startAudioFromButtonClick: audioReady definitively set to TRUE.");
+
+        if (onCanvasStartButton) { 
+            onCanvasStartButton.style.display = 'none';
+            console.log("startAudioFromButtonClick: #onCanvasStartButton display set to 'none'.");
+        }
+
+        if (typeof resetBeatDetectionHistory === 'function') {
+            resetBeatDetectionHistory();
+        }
+    } else {
+        console.error("startAudioFromButtonClick: AudioContext could not be resumed to 'running' state. Current state:", audioContext.state);
+        // Button should remain visible for another user attempt if resume failed or context isn't running.
+        if (onCanvasStartButton) onCanvasStartButton.style.display = 'block'; // Ensure it's visible
     }
 }
 
-if (startAudioButton) {
-    startAudioButton.addEventListener('click', function(event) {
-        event.stopPropagation(); 
-        handleAudioInteraction();
-    });
-    console.log("Event listener added to #startAudioButton.");
+// Event listener for the new on-canvas button
+if (onCanvasStartButton) {
+    onCanvasStartButton.addEventListener('click', startAudioFromButtonClick);
+    console.log("Event listener added to #onCanvasStartButton to call startAudioFromButtonClick.");
 } else {
-    console.warn("#startAudioButton element not found for event listener.");
+    console.warn("#onCanvasStartButton element not found when trying to add event listener.");
 }
+// --- End of New Audio Interaction Logic ---
 
-if (audioNoticeOverlay) {
-    audioNoticeOverlay.addEventListener('click', handleAudioInteraction);
-    console.log("Event listener added to #audioNoticeOverlay.");
-} else {
-    console.warn("#audioNoticeOverlay element not found for event listener.");
-}
-
-// --- End of Audio Interaction Overlay Logic ---
 
 loadAndPlayAudioFromURL("https://applecoconut.github.io/test-Jules/test1.mp3");
 
