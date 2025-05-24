@@ -23,3 +23,23 @@ html, body {
   padding: 20px;
   background-color: #1e1e1e; /* Slightly lighter background for the input area */
 }
+
+#onCanvasStartButton {
+    position: absolute; /* Positioned relative to nearest positioned ancestor or body */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center it on the canvas */
+    padding: 12px 25px;
+    font-size: 18px;
+    background-color: #333333; /* Dark grey button */
+    color: white;
+    border: 2px solid #555555; /* Slightly lighter border */
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 100; /* Ensure it's above the canvas but below other critical UI if any */
+    display: none; /* JavaScript will control visibility by changing this to 'block' or 'inline-block' */
+}
+
+#onCanvasStartButton:hover {
+    background-color: #555555; /* Darken on hover */
+}
