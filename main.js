@@ -3,6 +3,8 @@ console.log("main.js: Script start");
 // DOM Element References for Audio Interaction Overlay
 const audioNoticeOverlay = document.getElementById('audioNoticeOverlay');
 const startAudioButton = document.getElementById('startAudioButton');
+console.log("main.js: Reference to #audioNoticeOverlay:", audioNoticeOverlay);
+console.log("main.js: Reference to #startAudioButton:", startAudioButton);
 
 // Step 1: Set up basic Three.js scene, camera, and WebGLRenderer
 let scene, camera, renderer;
@@ -397,6 +399,7 @@ async function loadAndPlayAudioFromURL(audioURL) {
                 } else {
                     console.warn("loadAndPlayAudioFromURL: AudioContext state is still not 'running' after resume. State:", audioContext.state);
                     audioReady = false; // Explicitly ensure audioReady is false
+                    console.log("loadAndPlayAudioFromURL: Condition met to show overlay (state not 'running' post-resume). audioContext.state:", audioContext.state, "Calling showAudioInteractionOverlay()...");
                     if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
                         showAudioInteractionOverlay();
                     }
@@ -404,6 +407,7 @@ async function loadAndPlayAudioFromURL(audioURL) {
             } catch (err) {
                 console.error("loadAndPlayAudioFromURL: Error during audioContext.resume():", err);
                 audioReady = false; // Explicitly ensure audioReady is false
+                console.log("loadAndPlayAudioFromURL: Condition met to show overlay (error during resume). Error:", err, "Calling showAudioInteractionOverlay()...");
                 if (typeof showAudioInteractionOverlay === 'function') { // Check if function exists
                     showAudioInteractionOverlay();
                 }
@@ -412,18 +416,34 @@ async function loadAndPlayAudioFromURL(audioURL) {
         // End of new robust logic
 
     } catch (error) {
-        console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK:", error); // Log 10
-        audioReady = false;
-        // Ensure audioContext is closed on error if it was created
+        console.error("loadAndPlayAudioFromURL: MAIN CATCH BLOCK error:", error); // Ensure 'error' is logged
+        audioReady = false; // Already present, ensure it stays
+
+        // Attempt to close audioContext if it exists and isn't already closed
         if (audioContext && audioContext.state !== 'closed') {
-            try { 
-                await audioContext.close(); 
-                console.log("AudioContext closed on failure path.");
-            } catch(e) { 
-                console.error("Error closing audio context on failure path:", e); 
+            try {
+                // No 'await' here if we don't want the catch block to be async itself,
+                // or add 'async' to the catch block if necessary, but typically not done.
+                // For simplicity, fire-and-forget close or make this outer catch also async if critical.
+                // However, the main goal is to show the overlay.
+                audioContext.close().then(() => {
+                    console.log("loadAndPlayAudioFromURL: AudioContext closed in main catch block.");
+                }).catch(e => {
+                    console.error("loadAndPlayAudioFromURL: Error closing AudioContext in main catch block:", e);
+                });
+            } catch (e) { // Catch synchronous errors from calling close() itself, though unlikely
+                console.error("loadAndPlayAudioFromURL: Synchronous error calling audioContext.close() in main catch:", e);
             }
         }
-        audioContext = null; // Ensure context is null after error
+        audioContext = null; // Already present, ensure it stays
+
+        // Add the call to showAudioInteractionOverlay
+        if (typeof showAudioInteractionOverlay === 'function') {
+            console.log("loadAndPlayAudioFromURL: Main catch block calling showAudioInteractionOverlay()."); // Add this log
+            showAudioInteractionOverlay();
+        } else {
+            console.error("loadAndPlayAudioFromURL: showAudioInteractionOverlay function not found in main catch block!"); // Should not happen
+        }
     }
 }
 
@@ -480,11 +500,13 @@ console.log("main.js: Initial animate() call made.");
 
 // --- Audio Interaction Overlay Logic ---
 function showAudioInteractionOverlay() {
-    if (audioNoticeOverlay) {
-        audioNoticeOverlay.style.display = 'block'; // Or 'flex'
-        console.log("Audio interaction overlay shown.");
+    console.log("showAudioInteractionOverlay: Function called.");
+    if (audioNoticeOverlay) { // audioNoticeOverlay is the global const
+        console.log("showAudioInteractionOverlay: #audioNoticeOverlay DOM element IS found. Current display style (before change):", audioNoticeOverlay.style.display);
+        audioNoticeOverlay.style.display = 'block'; // Or 'flex' if it's a flex container and needs to be for centering
+        console.log("showAudioInteractionOverlay: Set display to 'block'. New display style (after change):", audioNoticeOverlay.style.display);
     } else {
-        console.warn("showAudioInteractionOverlay: #audioNoticeOverlay element not found.");
+        console.error("showAudioInteractionOverlay: #audioNoticeOverlay DOM element NOT FOUND when trying to show it! Check ID and script load order if 'Reference to #audioNoticeOverlay' log at top of main.js was null.");
     }
 }
 
