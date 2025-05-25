@@ -59,8 +59,8 @@ function initThreeJS() {
     console.log(`initThreeJS: Renderer size set to: ${canvas.clientWidth}w x ${canvas.clientHeight}h`);
 
     // Set Renderer Clear Color
-    renderer.setClearColor(0x000000); // Set to black
-    console.log("initThreeJS: Renderer clear color set to black (0x000000).");
+    renderer.setClearColor(0xFF00FF, 1); // Magenta, fully opaque
+    console.error("initThreeJS: Renderer CLEAR COLOR ATTEMPTED SET TO MAGENTA (0xFF00FF).");
 
     // Log Renderer Instance
     console.log("initThreeJS: Renderer instance:", renderer);
@@ -444,6 +444,7 @@ function animate() {
     // Log audioReady state after rendering attempt
     console.log("animate: current audioReady state:", audioReady);
 
+    /*
     if (audioReady) {
         // Optional: console.log("animate: audioReady is true, processing audio.");
         
@@ -472,10 +473,13 @@ function animate() {
         // The 5 static debug particles from initFountainParticles and the test cube will still be visible.
         // No new particles will be emitted, and existing ones won't be updated by updateParticles.
     }
+    */
 }
 
 // Initialize and start animation
+console.error("main.js: PREPARING TO CALL initThreeJS() globally.");
 initThreeJS();
+console.error("main.js: CALL to initThreeJS() globally COMPLETED.");
 initFountainParticles();
 animate();
 console.log("main.js: Initial animate() call made.");
